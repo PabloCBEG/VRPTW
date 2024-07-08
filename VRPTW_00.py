@@ -3,8 +3,13 @@
 #import libraries
 import numpy as np
 import matplotlib.pyplot as plt
-import time
+from time import time
 import pandas as pd
+
+vehicle_cost = 100
+# avgspeed = 60
+# for computation:
+avgspeed = 1
 
 def read_txt_file(filename):
     """
@@ -34,8 +39,8 @@ def read_txt_file(filename):
                 coordx.append(      float   (elements[1]))  # X coordinate of each customer
                 coordy.append(      float   (elements[2]))  # Y coordinate of each customer
                 demand.append(      int     (elements[3]))  # Demand of each customer
-                readytime.append(   float   (elements[4]))  # Ready time of each customer (won't be using it for CVRP)
-                duedate.append(     float   (elements[5]))  # Due date of each customer (won't be using it for CVRP)
+                readytime.append(   float   (elements[4]))  # Ready time of each customer (won't be using it for VRPTW)
+                duedate.append(     float   (elements[5]))  # Due date of each customer (won't be using it for VRPTW)
                 servicetime.append( float   (elements[6]))  # Service time of each customer
 
             count += 1
@@ -60,7 +65,7 @@ def total_distance(route, diction):
         total += distance(diction[route[i]], diction[route[i+1]])
     return total
 
-# We are meant to change this objective function according to CVRP optimization objectives
+# We are meant to change this objective function according to VRPTW optimization objectives
 def objective_function(solution, diction):
     # Mi función objetivo, a minimizar, es el coste, No la distancia.
     # Coste por vehiculo y coste por desplazamiento.
@@ -158,7 +163,7 @@ color_plot_array = ['r', 'g', 'b', 'k', 'y', 'p', 'm']
 u_array_for_plotting = []
 label_list_for_plotting = ['Swap neighbourhood', 'Insertion neighbourhood','Last found solution']
 
-def vnd_for_cvrp(route, dict_xy):
+def vnd_for_vrptw(route, dict_xy):
 
     current_route = route.copy()
     best_route = route.copy()
@@ -184,48 +189,46 @@ def vnd_for_cvrp(route, dict_xy):
 
         u_array_for_plotting.append(u)
 
-        # SI se quiere visualizar la evolucion de la solucion,
-        # "descomentar" las 4 lineas posteriores. Habra que ir cerrando la ventana de plot para que se siga ejecutando
-        # (esto permite apreciar como va cambiando)
-        # plt.figure(3)
-        # plot_problem(dict_xy)
-        # plot_solution(current_route, dict_xy)
-        # plt.show()
-
     # print("01 Ha ejecutado correctamente VND\n")
     print("Ruta obtenida a partir de los clientes restantes: ", best_route, "\n")
 
     return best_route, best_distance
 
-def cvrp_solver_vnd(route, dict_xy, dist_matrix, veh_num, capacity, demand):
+def vrptw_solver_vnd(route, dict_xy, dist_matrix, veh_num, servicetime, duedate):
     num_points = dist_matrix.shape[0]
     visited = np.zeros(num_points, dtype=bool)
     routes = []
     # route_aux = []
     current_node = 0
-    carga = np.zeros(veh_num, dtype=int)
+    # carga = np.zeros(veh_num, dtype=int)
     # route = [current_node]
     visited[current_node] = True
-    load_index = 0
+    # load_index = 0
 
-    # print("00 Ha entrado en cvrp_solver_vnd\n")
+    deliverytimes = []
+
+    # print("00 Ha entrado en vrptw_solver_vnd\n")
 
     while np.sum(visited) < num_points and len(routes) < veh_num:
-        new_route_vnd, new_distance_cvrp = vnd_for_cvrp(route, dict_xy)
+        new_route_vnd, new_distance_vrptw = vnd_for_vrptw(route, dict_xy)
         route_aux = [0]
         route_aux2 = []
 
-        print("Tamaño de la nueva ruta: ", len(new_route_vnd), "\n")
+        tiemporruta = 0
+        deliverytime = []
+
+        print("Tamaño de la nueva ruta propuesta por VND: ", len(new_route_vnd), "\n")
 
         # print("02 Ha ejecutado ", load_index, " veces el VND\n")
 
         for i in range(len(new_route_vnd)):
             if new_route_vnd[i] != 0:
                 # This is the only condition to be changed for VRPTW
-                if tiemporruta + dist_matrix[current, neighbour] / avgspeed <= duedate[neighbour] and tiemporruta + dist_matrix[current, neighbour] / avgspeed + dist_matrix[neighbour, 0] / avgspeed <= duedate[0]:
+                if tiemporruta + dist_matrix[new_route_vnd[i-1], new_route_vnd[i]] / avgspeed <= duedate[new_route_vnd[i]] and tiemporruta + dist_matrix[new_route_vnd[i-1], new_route_vnd[i]] / avgspeed + dist_matrix[new_route_vnd[i], 0] / avgspeed + servicetime[new_route_vnd[i]] <= duedate[0]:
                     route_aux.append(new_route_vnd[i])
-                    tiemporruta += dist_matrix[current, neighbour] / avgspeed + servicetime[neighbour]
+                    tiemporruta += dist_matrix[new_route_vnd[i-1], new_route_vnd[i]] / avgspeed + servicetime[new_route_vnd[i]]
                     visited[new_route_vnd[i]] = True
+                    deliverytime.append(round(tiemporruta))
                 else:
                     route_aux2 = route_aux.copy()
                     route_aux2.remove(0)
@@ -233,8 +236,9 @@ def cvrp_solver_vnd(route, dict_xy, dist_matrix, veh_num, capacity, demand):
                     break
             else: i += 1
         
-        load_index += 1
+        # load_index += 1
         routes.append(route_aux)
+        deliverytimes.append(deliverytime)
 
         # len_aux = len(route)
         # Remove visited clients from pending clients neighbourhood
@@ -242,9 +246,9 @@ def cvrp_solver_vnd(route, dict_xy, dist_matrix, veh_num, capacity, demand):
             # print("Elemento a eliminar: ", route_aux2[i], "\n")
             route.remove(route_aux2[i])
 
-    return routes, carga
+    return routes, deliverytimes
 
-def local_search_for_cvrp(initial_solution, dict_xy):
+def local_search_for_vrptw(initial_solution, dict_xy):
     current_solution_value = objective_function(initial_solution, dict_xy)
     current_solution=initial_solution[:]
     
@@ -264,37 +268,46 @@ def local_search_for_cvrp(initial_solution, dict_xy):
             # print(current_solution, current_solution_value)
         else:
             break
+
+        print("Ruta obtenida a partir de los clientes restantes: ", current_solution, "\n")
         
     return current_solution, current_solution_value
 
-def cvrp_solver_ls(route, dict_xy, dist_matrix, veh_num, capacity, demand):
+def vrptw_solver_ls(route, dict_xy, dist_matrix, veh_num, servicetime, duedate):
     num_points = dist_matrix.shape[0]
     visited = np.zeros(num_points, dtype=bool)
     routes = []
     # route_aux = []
     current_node = 0
-    carga = np.zeros(veh_num, dtype=int)
+    # carga = np.zeros(veh_num, dtype=int)
     # route = [current_node]
     visited[current_node] = True
-    load_index = 0
+    # load_index = 0
 
-    # print("00 Ha entrado en cvrp_solver_ls\n")
+    deliverytimes = []
+
+    # print("00 Ha entrado en vrptw_solver_ls\n")
 
     while np.sum(visited) < num_points and len(routes) < veh_num:
-        new_route_ls, new_distance_ls = local_search_for_cvrp(route, dict_xy)
+        new_route_ls, new_distance_ls = local_search_for_vrptw(route, dict_xy)
         route_aux = [0]
         route_aux2 = []
 
-        print("Tamaño de la nueva ruta: ", len(new_route_ls), "\n")
+        tiemporruta = 0
+        deliverytime = []
+
+        print("Tamaño de la nueva ruta propuesta por LS: ", len(new_route_ls), "\n")
 
         # print("02 Ha ejecutado ", load_index, " veces el LS\n")
 
         for i in range(len(new_route_ls)):
             if new_route_ls[i] != 0:
-                if carga[load_index] + demand[new_route_ls[i]] <= capacity:
+                # This is the only condition to be changed for VRPTW
+                if tiemporruta + dist_matrix[new_route_ls[i-1], new_route_ls[i]] / avgspeed <= duedate[new_route_ls[i]] and tiemporruta + dist_matrix[new_route_ls[i-1], new_route_ls[i]] / avgspeed + dist_matrix[new_route_ls[i], 0] / avgspeed + servicetime[new_route_ls[i]] <= duedate[0]:
                     route_aux.append(new_route_ls[i])
-                    carga[load_index] += demand[new_route_ls[i]]
+                    tiemporruta += dist_matrix[new_route_ls[i-1], new_route_ls[i]] / avgspeed + servicetime[new_route_ls[i]]
                     visited[new_route_ls[i]] = True
+                    deliverytime.append(round(tiemporruta))
                 else:
                     route_aux2 = route_aux.copy()
                     route_aux2.remove(0)
@@ -302,8 +315,8 @@ def cvrp_solver_ls(route, dict_xy, dist_matrix, veh_num, capacity, demand):
                     break
             else: i += 1
         
-        load_index += 1
         routes.append(route_aux)
+        deliverytimes.append(deliverytime)
 
         # len_aux = len(route)
         # Remove visited clients from pending clients neighbourhood
@@ -311,9 +324,19 @@ def cvrp_solver_ls(route, dict_xy, dist_matrix, veh_num, capacity, demand):
             # print("Elemento a eliminar: ", route_aux2[i], "\n")
             route.remove(route_aux2[i])
 
-    return routes, carga
+    return routes, deliverytimes
 
 # Have in mind: auxiliary functions shall be put in a separate file for cleanness.
+
+def total_cost(routes, dist_matrix):
+    cost = 0
+    for i in range(len(routes)):
+        for j in range(len(routes[i]) - 1):
+            cost += dist_matrix[routes[i][j]][routes[i][j+1]]
+    
+    cost += len(routes) * vehicle_cost
+
+    return cost
 
 # Main function
 def main():
@@ -321,7 +344,9 @@ def main():
     """ Change values for VND / Local Search """
     flag = 1 # 0: VND, 1: LS
 
-    veh_num, capacity, custnum, coordx, coordy, demand, readytime, duedate, servicetime = read_txt_file("C:\\Users\\Pablo\\OneDrive - UNIVERSIDAD DE SEVILLA\\MOIGE\\CUATRI2\\MOPG\\Python\\07 CVRP\\CVRP\\Datos.txt")
+    t1 = time()
+
+    veh_num, capacity, custnum, coordx, coordy, demand, readytime, duedate, servicetime = read_txt_file("C:\\Users\\Pablo\\OneDrive - UNIVERSIDAD DE SEVILLA\\MOIGE\\CUATRI2\\MOPG\\Python\\08 VRPTW\\VRPTW\\Datos.txt")
 
     dict_xy = {custnum[i]: (coordx[i], coordy[i]) for i in range(len(custnum))}
 
@@ -331,21 +356,23 @@ def main():
 
     # print("Initial route: ", initial_route)
 
-    # best_route, best_distance = vnd_for_cvrp(initial_route, dict_xy)
+    # best_route, best_distance = vnd_for_vrptw(initial_route, dict_xy)
 
     if flag == 0:
-        routes1, cargas1 = cvrp_solver_vnd(initial_route, dict_xy, distanceMatrix, veh_num, capacity, demand)
+        routes1, deliverytimes1 = vrptw_solver_vnd(initial_route, dict_xy, distanceMatrix, veh_num, servicetime, duedate)
         routes = routes1
-        cargas = cargas1
+        deliverytimes = deliverytimes1
     else:
-        routes2, cargas2 = cvrp_solver_ls(initial_route, dict_xy, distanceMatrix, veh_num, capacity, demand)
+        routes2, deliverytimes2 = vrptw_solver_ls(initial_route, dict_xy, distanceMatrix, veh_num, servicetime, duedate)
         routes = routes2
-        cargas = cargas2
+        deliverytimes = deliverytimes2
+
+    t2 = time()
 
     # Plotting the problem
     # plot_problem(dict_xy)
 
-    print("Vector de cargas: ", cargas, "\n")
+    print("Vector de tiempos de entrega: ", deliverytimes, "\n")
 
     plt.figure(1)
     # plt.plot(range(0,len(current_distance_array)), current_distance_array, marker='o')
@@ -358,6 +385,8 @@ def main():
 
     print("Routes:", routes)
     plot_solution(routes, dict_xy)
+    print("Total cost: ", total_cost(routes, distanceMatrix), "\n")
+    print("Execution time: ",   t2 - t1, "\n")
 
     plt.show()
     
