@@ -62,6 +62,10 @@ def total_distance(route, diction):
 
 # We are meant to change this objective function according to CVRP optimization objectives
 def objective_function(solution, diction):
+    # Mi función objetivo, a minimizar, es el coste, No la distancia.
+    # Coste por vehiculo y coste por desplazamiento.
+    # No obstante, el num de vehiculos que uso va a ser el "minimo"
+    # por constitucion del algoritmo
     return total_distance(solution, diction)
 
 # Distance matrix makes it computationally faster to calculate the distance between two points.
@@ -217,9 +221,10 @@ def cvrp_solver_vnd(route, dict_xy, dist_matrix, veh_num, capacity, demand):
 
         for i in range(len(new_route_vnd)):
             if new_route_vnd[i] != 0:
-                if carga[load_index] + demand[new_route_vnd[i]] <= capacity:
+                # This is the only condition to be changed for VRPTW
+                if tiemporruta + dist_matrix[current, neighbour] / avgspeed <= duedate[neighbour] and tiemporruta + dist_matrix[current, neighbour] / avgspeed + dist_matrix[neighbour, 0] / avgspeed <= duedate[0]:
                     route_aux.append(new_route_vnd[i])
-                    carga[load_index] += demand[new_route_vnd[i]]
+                    tiemporruta += dist_matrix[current, neighbour] / avgspeed + servicetime[neighbour]
                     visited[new_route_vnd[i]] = True
                 else:
                     route_aux2 = route_aux.copy()
