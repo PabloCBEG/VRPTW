@@ -1,4 +1,4 @@
-# Building CVRP solver using metaheuristics from scratch.
+# Building VRPTW solver using metaheuristics from scratch.
 
 #import libraries
 import numpy as np
